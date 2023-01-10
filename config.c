@@ -510,7 +510,7 @@ void ParseConfigFile(const char *filename) {
 
   if (filename != NULL || !ParseOneConfigFile("zelda3.user.ini", 0)) {
     if (filename == NULL)
-      filename = "zelda3.ini";
+      filename = "/zelda3.ini";
     if (!ParseOneConfigFile(filename, 0))
       fprintf(stderr, "Warning: Unable to read config file %s\n", filename);
   }
