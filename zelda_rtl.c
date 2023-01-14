@@ -1,3 +1,7 @@
+#ifdef EMSCRIPTEN
+#include <emscripten.h>
+#endif /* EMSCRIPTEN */
+
 #include "zelda_rtl.h"
 #include "variables.h"
 #include "misc.h"
@@ -10,6 +14,35 @@
 #include "spc_player.h"
 #include "util.h"
 #include "audio.h"
+
+#ifdef EMSCRIPTEN
+EM_JS(void, js_read_sram, (uint8* sram_address, size_t length), {
+  const string = localStorage.getItem("ZELDA_SRAM") ?? "";
+
+  if (!string.length) {
+    console.log("No save data found...");
+  }
+
+  if (length !=  string.length) {
+    console.error("Unable to load save...");
+  }
+
+  for (let i = 0; i < string.length; i++) {
+    const value = string.charCodeAt(i);
+    setValue(sram_address + i, value, "i8");
+  }
+});
+
+EM_JS(void, js_write_sram, (uint8* sram_address, size_t length), {
+  const end_address = sram_address + length;
+  let string = "";
+  for(let ptr = sram_address; ptr < end_address; ptr++) {
+    const value = getValue(ptr, 'i8');
+    string += String.fromCharCode(value);
+  }
+  localStorage.setItem("ZELDA_SRAM", string);
+});
+#endif /* EMSCRIPTEN */
 
 ZeldaEnv g_zenv;
 uint8 g_ram[131072];
@@ -846,8 +879,10 @@ void PatchCommand(char c) {
   StateRecoderMultiPatch_Commit(&mp);
 }
 
-
 void ZeldaReadSram() {
+#ifdef EMSCRIPTEN
+  js_read_sram(g_zenv.sram, 8192);
+#else
   FILE *f = fopen("saves/sram.dat", "rb");
   if (f) {
     if (fread(g_zenv.sram, 1, 8192, f) != 8192)
@@ -855,9 +890,13 @@ void ZeldaReadSram() {
     fclose(f);
     EmuSynchronizeWholeState();
   }
+#endif /* EMSCRIPTEN */
 }
 
 void ZeldaWriteSram() {
+#ifdef EMSCRIPTEN
+  js_write_sram(g_zenv.sram, 8192);
+#else
   rename("saves/sram.dat", "saves/sram.bak");
   FILE *f = fopen("saves/sram.dat", "wb");
   if (f) {
@@ -866,4 +905,5 @@ void ZeldaWriteSram() {
   } else {
     fprintf(stderr, "Unable to write saves/sram.dat\n");
   }
+#endif /* EMSCRIPTEN */
 }
