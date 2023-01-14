@@ -1,7 +1,7 @@
 version: "2"
 services:
   zelda-build:
-    # command: emmake make clean && emmake make
+    command: emmake make clean && emmake make web
     working_dir: /app
     build: .
     volumes:

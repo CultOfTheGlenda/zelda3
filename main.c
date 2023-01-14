@@ -108,12 +108,13 @@ static void sdl_loop(void* arg) {
 
   DrawPpuFrameWithPerf();
 
-  // if (g_config.display_perf_title) {
-  //   char title[60];
-  //   snprintf(title, sizeof(title), "%s | FPS: %d", kWindowTitle, g_curr_fps);
-  //   SDL_SetWindowTitle(g_window, title);
-  // }
-  // printf("fps: %d\n", g_curr_fps);
+#ifndef EMSCRIPTEN
+  if (g_config.display_perf_title) {
+    char title[60];
+    snprintf(title, sizeof(title), "%s | FPS: %d", kWindowTitle, g_curr_fps);
+    SDL_SetWindowTitle(g_window, title);
+  }
+#endif /* EMSCRIPTEN */
 
   // if vsync isn't working, delay manually
   curTick = SDL_GetTicks();
@@ -148,9 +149,6 @@ static const char kWindowTitle[] = "The Legend of Zelda: A Link to the Past";
 
 static uint32 g_win_flags = SDL_WINDOW_RESIZABLE;
 static SDL_Window *g_window;
-
-
-
 
 void NORETURN Die(const char *error) {
 #if defined(NDEBUG) && defined(_WIN32)
@@ -475,7 +473,7 @@ int main(int argc, char** argv) {
   while (running) {
     sdl_loop(NULL);
   }
-#endif
+#endif /* EMSCRIPTEN */
 
   goto skip_loop;
   while(running) {
@@ -884,15 +882,20 @@ static void LoadLinkGraphics() {
   }
 }
 
-
 const uint8 *g_asset_ptrs[kNumberOfAssets];
 uint32 g_asset_sizes[kNumberOfAssets];
 
+#ifdef EMSCRIPTEN
+#define DEFAULT_DAT_FILE "/zelda3_assets.dat"
+#else
+#define DEFAULT_INI_FILE "tables/zelda3_assets.dat"
+#endif /* EMSCRIPTEN */
+
 static void LoadAssets() {
   size_t length = 0;
-  uint8 *data = ReadWholeFile("/zelda3_assets.dat", &length);
+  uint8 *data = ReadWholeFile(DEFAULT_DAT_FILE, &length);
   if (!data)
-    data = ReadWholeFile("/zelda3_assets.dat", &length);
+    data = ReadWholeFile("zelda3_assets.dat", &length);
   if (!data) Die("Failed to read zelda3_assets.dat. Please see the README for information about how you get this file.");
 
   static const char kAssetsSig[] = { kAssets_Sig };

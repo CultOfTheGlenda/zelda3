@@ -6,6 +6,12 @@
 #include "features.h"
 #include "util.h"
 
+#ifdef EMSCRIPTEN
+#define DEFAULT_INI_FILE "/zelda3.ini"
+#else
+#define DEFAULT_INI_FILE "zelda3.ini"
+#endif /* EMSCRIPTEN */
+
 enum {
   kKeyMod_ScanCode = 0x200,
   kKeyMod_Alt = 0x400,
@@ -510,7 +516,7 @@ void ParseConfigFile(const char *filename) {
 
   if (filename != NULL || !ParseOneConfigFile("zelda3.user.ini", 0)) {
     if (filename == NULL)
-      filename = "/zelda3.ini";
+      filename = DEFAULT_INI_FILE;
     if (!ParseOneConfigFile(filename, 0))
       fprintf(stderr, "Warning: Unable to read config file %s\n", filename);
   }
