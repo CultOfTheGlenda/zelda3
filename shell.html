@@ -202,25 +202,42 @@
       document.body.appendChild(scriptTag);
       this.style.display = 'none';
       
-      const baseHeight = 224;
-      const baseWidth = 398;
+
+      setTimeout(() => scriptTag.src = 'zelda3.js', 0);
+    };
+
+    let lastMaxScalingSize = -Infinity;
+    function setWindowScale() {
+      const canvas = document.querySelector('.theatre canvas');
+      const baseHeight = Module._get_internal_height();
+      const baseWidth =  Module._get_internal_width();
       /* Calculate optimal canvas size. */
       const maxScalingSize = Math.min(
         Math.floor(window.innerHeight / baseHeight),
         Math.floor(window.innerWidth / baseWidth)
       );
 
-      canvas.height = baseHeight * maxScalingSize;
-      canvas.width = baseWidth * maxScalingSize;
-      canvas.style.height = `${baseHeight * maxScalingSize}px`;
-      canvas.style.width = `${baseWidth * maxScalingSize}px`;
+      if (maxScalingSize === lastMaxScalingSize) return;
 
-      setTimeout(() => scriptTag.src = 'zelda3.js', 0);
+      const width = baseWidth * maxScalingSize;
+      const height = baseHeight * maxScalingSize;
+      canvas.width = baseWidth * maxScalingSize;
+      canvas.height = baseHeight * maxScalingSize;
+      canvas.style.width = `${baseWidth * maxScalingSize}px`;
+      canvas.style.height = `${baseHeight * maxScalingSize}px`;
+
+      Module._set_window_size(width, height);
+      lastMaxScalingSize = maxScalingSize;
     };
 
     var Module = {
       preRun: [],
-      postRun: [],
+      postRun: [
+        () => {
+          setWindowScale();
+          window.onresize = setWindowScale;
+        },
+      ],
       print: (function () {
         var element = document.getElementById('output');
         if (element) element.value = ''; // clear browser cache

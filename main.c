@@ -97,12 +97,10 @@ static void sdl_loop(void* arg) {
         HandleGamepadInput(b, event.type == SDL_CONTROLLERBUTTONDOWN);
       break;
     }
-#ifdef EMSCRIPTEN
     case SDL_MOUSEWHEEL:
       if (SDL_GetModState() & KMOD_CTRL && event.wheel.y != 0)
         ChangeWindowScale(event.wheel.y > 0 ? 1 : -1);
       break;
-#endif /* EMSCRIPTEN */
     case SDL_MOUSEBUTTONDOWN:
       if (event.button.button == SDL_BUTTON_LEFT && event.button.state == SDL_PRESSED && event.button.clicks == 2) {
         if ((g_win_flags & SDL_WINDOW_FULLSCREEN_DESKTOP) == 0 && (g_win_flags & SDL_WINDOW_FULLSCREEN) == 0 && SDL_GetModState() & KMOD_SHIFT) {
@@ -199,6 +197,22 @@ void NORETURN Die(const char *error) {
   exit(1);
 }
 
+EMSCRIPTEN_KEEPALIVE
+int get_internal_height() {
+  return g_snes_height;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int get_internal_width() {
+  return g_snes_width;
+}
+
+EMSCRIPTEN_KEEPALIVE
+void set_window_size(int w, int h) {
+  SDL_SetWindowSize(g_window, w, h);
+}
+
+EMSCRIPTEN_KEEPALIVE
 void ChangeWindowScale(int scale_step) {
   if ((SDL_GetWindowFlags(g_window) & (SDL_WINDOW_FULLSCREEN_DESKTOP | SDL_WINDOW_FULLSCREEN | SDL_WINDOW_MINIMIZED | SDL_WINDOW_MAXIMIZED)) != 0)
     return;
@@ -225,8 +239,8 @@ void ChangeWindowScale(int scale_step) {
   int w = new_scale * g_snes_width;
   int h = new_scale * g_snes_height;
 
-  //SDL_RenderSetLogicalSize(g_renderer, w, h);
   SDL_SetWindowSize(g_window, w, h);
+
   if (bt >= 0) {
     // Center the window on top of the mouse
     int mx, my;
@@ -411,7 +425,6 @@ int main(int argc, char** argv) {
   g_snes_width = (g_config.extended_aspect_ratio * 2 + 256);
   g_snes_height = (g_config.extend_y ? 240 : 224);
 
-
   // Delay actually setting those features in ram until any snapshots finish playing.
   g_wanted_zelda_features = g_config.features0;
 
@@ -499,7 +512,6 @@ int main(int argc, char** argv) {
 #endif
 
   ZeldaReadSram();
-  // ZeldaWriteSram();
 
   for (int i = 0; i < SDL_NumJoysticks(); i++)
     OpenOneGamepad(i);
@@ -512,16 +524,19 @@ int main(int argc, char** argv) {
   /* Print debug information. */
   printf(
     "Configuration:\n"
+    "\tg_ram: %p\n"
     "\taudio_samples: %u\n"
     "\tenhanced_mode7: %s\n"
     "\tautosave: %s\n"
     "\tnew_renderer: %s\n",
+    g_ram,
     g_config.audio_samples,
     g_config.enhanced_mode7 ? "true" : "false",
     g_config.autosave ? "true" : "false",
     g_config.new_renderer ? "true" : "false"
 
   );
+
 
 #ifdef EMSCRIPTEN
   emscripten_set_main_loop_arg(sdl_loop, NULL, 0, 1);
@@ -530,104 +545,6 @@ int main(int argc, char** argv) {
     sdl_loop(NULL);
   }
 #endif /* EMSCRIPTEN */
-
-  goto skip_loop;
-  while(running) {
-    while(SDL_PollEvent(&event)) {
-      switch(event.type) {
-      case SDL_CONTROLLERDEVICEADDED:
-        OpenOneGamepad(event.cdevice.which);
-        break;
-      case SDL_CONTROLLERAXISMOTION:
-        HandleGamepadAxisInput(event.caxis.which, event.caxis.axis, event.caxis.value);
-        break;
-      case SDL_CONTROLLERBUTTONDOWN:
-      case SDL_CONTROLLERBUTTONUP: {
-        int b = RemapSdlButton(event.cbutton.button);
-        if (b >= 0)
-          HandleGamepadInput(b, event.type == SDL_CONTROLLERBUTTONDOWN);
-        break;
-      }
-      case SDL_MOUSEWHEEL:
-        if (SDL_GetModState() & KMOD_CTRL && event.wheel.y != 0)
-          ChangeWindowScale(event.wheel.y > 0 ? 1 : -1);
-        break;
-      case SDL_MOUSEBUTTONDOWN:
-        if (event.button.button == SDL_BUTTON_LEFT && event.button.state == SDL_PRESSED && event.button.clicks == 2) {
-          if ((g_win_flags & SDL_WINDOW_FULLSCREEN_DESKTOP) == 0 && (g_win_flags & SDL_WINDOW_FULLSCREEN) == 0 && SDL_GetModState() & KMOD_SHIFT) {
-            g_win_flags ^= SDL_WINDOW_BORDERLESS;
-            SDL_SetWindowBordered(g_window, (g_win_flags & SDL_WINDOW_BORDERLESS) == 0);
-          }
-        }
-        break;
-      case SDL_KEYDOWN:
-        HandleInput(event.key.keysym.sym, event.key.keysym.mod, true);
-        break;
-      case SDL_KEYUP:
-        HandleInput(event.key.keysym.sym, event.key.keysym.mod, false);
-        break;
-      case SDL_QUIT:
-        running = false;
-        break;
-      }
-    }
-
-    if (g_paused != audiopaused) {
-      audiopaused = g_paused;
-      if (device)
-        SDL_PauseAudioDevice(device, audiopaused);
-    }
-
-    if (g_paused) {
-      SDL_Delay(16);
-      continue;
-    }
-
-    // Clear gamepad inputs when joypad directional inputs to avoid wonkiness
-    int inputs = g_input1_state;
-    if (g_input1_state & 0xf0)
-      g_gamepad_buttons = 0;
-    inputs |= g_gamepad_buttons;
-
-    SDL_LockMutex(g_audio_mutex);
-    bool is_replay = ZeldaRunFrame(inputs);
-    SDL_UnlockMutex(g_audio_mutex);
-
-    frameCtr++;
-
-    if ((g_turbo ^ (is_replay & g_replay_turbo)) && (frameCtr & (g_turbo ? 0xf : 0x7f)) != 0) {
-      continue;
-    }
-
-    // DrawPpuFrameWithPerf();
-
-    // if (g_config.display_perf_title) {
-    //   char title[60];
-    //   snprintf(title, sizeof(title), "%s | FPS: %d", kWindowTitle, g_curr_fps);
-    //   SDL_SetWindowTitle(g_window, title);
-    // }
-
-    // if vsync isn't working, delay manually
-    curTick = SDL_GetTicks();
-
-    if (!g_config.disable_frame_delay) {
-      static const uint8 delays[3] = { 17, 17, 16 }; // 60 fps
-      lastTick += delays[frameCtr % 3];
-
-      if (lastTick > curTick) {
-        uint32 delta = lastTick - curTick;
-        if (delta > 500) {
-          lastTick = curTick - 500;
-          delta = 500;
-        }
-//        printf("Sleeping %d\n", delta);
-        SDL_Delay(delta);
-      } else if (curTick - lastTick > 500) {
-        lastTick = curTick;
-      }
-    }
-  }
-  skip_loop:
 
   if (g_config.autosave)
     HandleCommand(kKeys_Save + 0, true);
