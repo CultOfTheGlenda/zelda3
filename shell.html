@@ -173,6 +173,28 @@
     <progress value="0" max="100" id="progress" hidden=1></progress>
   </div>
 
+  <div class="inventory-editor">
+    <input class="inventory-editor-item" type="checkbox" data-value="0x1" data-address="0xF341" name="boomerang">boomerang</input>
+    <input class="inventory-editor-item" type="checkbox" data-value="0x1" data-address="0xF342" name="hookshot">hookshot</input>
+    <input class="inventory-editor-item" type="checkbox" data-value="0x1" data-address="0xF343" name="bombs">bombs</input>
+    <input class="inventory-editor-item" type="checkbox" data-value="0x1" data-address="0xF345" name="fire_rod">fire_rod</input>
+    <input class="inventory-editor-item" type="checkbox" data-value="0x1" data-address="0xF346" name="ice_rod">ice_rod</input>
+    <input class="inventory-editor-item" type="checkbox" data-value="0x1" data-address="0xF347" name="bombos_medallion">bombos_medallion</input>
+    <input class="inventory-editor-item" type="checkbox" data-value="0x1" data-address="0xF348" name="ether_medallion">ether_medallion</input>
+    <input class="inventory-editor-item" type="checkbox" data-value="0x1" data-address="0xF349" name="quake_medallion">quake_medallion</input>
+    <input class="inventory-editor-item" type="checkbox" data-value="0x1" data-address="0xF34A" name="torch">torch</input>
+    <input class="inventory-editor-item" type="checkbox" data-value="0x1" data-address="0xF34B" name="hammer">hammer</input>
+    <input class="inventory-editor-item" type="checkbox" data-value="0x1" data-address="0xF34D" name="bug_net">bug_net</input>
+    <input class="inventory-editor-item" type="checkbox" data-value="0x1" data-address="0xF34E" name="book_of_mudora">book_of_mudora</input>
+    <input class="inventory-editor-item" type="checkbox" data-value="0x1" data-address="0xF350" name="cane_somaria">cane_somaria</input>
+    <input class="inventory-editor-item" type="checkbox" data-value="0x1" data-address="0xF351" name="cane_byrna">cane_byrna</input>
+    <input class="inventory-editor-item" type="checkbox" data-value="0x1" data-address="0xF352" name="cape">cape</input>
+    <input class="inventory-editor-item" type="checkbox" data-value="0x1" data-address="0xF355" name="boots">boots</input>
+    <input class="inventory-editor-item" type="checkbox" data-value="0x1" data-address="0xF356" name="flippers">flippers</input>
+    <input class="inventory-editor-item" type="checkbox" data-value="0x1" data-address="0xF357" name="moon_pearl">moon_pearl</input>
+    <input class="inventory-editor-item" type="checkbox" data-value="0x2" data-address="0xF353" name="mirror">mirror</input>
+  </div>
+
   <div class="theatre">
     <canvas
       width="398"
@@ -236,6 +258,30 @@
         () => {
           setWindowScale();
           window.onresize = setWindowScale;
+          const inventoryEditor = document.querySelector('.inventory-editor');
+          const itemElements = inventoryEditor.querySelectorAll('.inventory-editor-item');
+          setInterval(() => {
+            itemElements.forEach((item) => {
+              const gramAddress = Module._js_get_g_ram();
+              const address = +item.dataset.address;
+              const gameValue = getValue(gramAddress + address, 'i8');
+              if (gameValue) item.checked = true;
+              else item.checked = false;
+            });
+          }, 250);
+
+          inventoryEditor.addEventListener('click', (e) => {
+            if (!e.target?.classList?.contains('inventory-editor-item')) {
+              return;
+            }
+
+            const isSet = e.target.checked;
+            const address = +e.target.dataset.address;
+            const value = isSet ? +e.target.dataset.value : 0x0;
+
+            const gramAddress = Module._js_get_g_ram();
+            setValue(gramAddress + address, value, 'i8');
+          });
         },
       ],
       print: (function () {
@@ -243,11 +289,7 @@
         if (element) element.value = ''; // clear browser cache
         return function (text) {
           if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
-          // These replacements are necessary if you render to raw HTML
-          //text = text.replace(/&/g, "&amp;");
-          //text = text.replace(/</g, "&lt;");
-          //text = text.replace(/>/g, "&gt;");
-          //text = text.replace('\n', '<br>', 'g');
+
           console.log(text);
           if (element) {
             element.value += text + "\n";

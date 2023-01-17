@@ -15,11 +15,6 @@
 #include "util.h"
 #include "audio.h"
 
-EMSCRIPTEN_KEEPALIVE
-void js_scale_down() {
-  // ChangeWindowScale(-1);
-}
-
 #ifdef EMSCRIPTEN
 EM_JS(void, js_read_sram, (uint8* sram_address, size_t length), {
   const string = localStorage.getItem("ZELDA_SRAM") ?? "";

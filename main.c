@@ -198,6 +198,11 @@ void NORETURN Die(const char *error) {
 }
 
 EMSCRIPTEN_KEEPALIVE
+void* js_get_g_ram(void) {
+  return g_ram;
+}
+
+EMSCRIPTEN_KEEPALIVE
 int get_internal_height() {
   return g_snes_height;
 }
