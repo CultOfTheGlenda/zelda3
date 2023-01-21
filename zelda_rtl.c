@@ -16,8 +16,16 @@
 #include "audio.h"
 
 #ifdef EMSCRIPTEN
-EM_JS(void, js_read_sram, (uint8* sram_address, size_t length), {
-  const string = localStorage.getItem("ZELDA_SRAM") ?? "";
+EM_JS(size_t, js_get_data_size, (void* key_ptr), {
+  const key = UTF8ToString(key_ptr, 32);
+  const string = localStorage.getItem(key) ?? "";
+
+  return string.length;
+});
+
+EM_JS(void, js_read_data, (void* key_ptr, void* address, size_t length), {
+  const key = UTF8ToString(key_ptr, 32);
+  const string = localStorage.getItem(key) ?? "";
 
   if (!string.length) {
     console.log("No save data found...");
@@ -29,25 +37,24 @@ EM_JS(void, js_read_sram, (uint8* sram_address, size_t length), {
 
   for (let i = 0; i < string.length; i++) {
     const value = string.charCodeAt(i);
-    setValue(sram_address + i, value, "i8");
+    setValue(address + i, value, "i8");
   }
 });
 
-EM_JS(void, js_write_sram, (uint8* sram_address, size_t length), {
-  const end_address = sram_address + length;
+EM_JS(void, js_write_data, (void* key_ptr, void* address, size_t length), {
+  const key = UTF8ToString(key_ptr, 32);
+  const end_address = address + length;
   let string = "";
-  for(let ptr = sram_address; ptr < end_address; ptr++) {
+  for(let ptr = address; ptr < end_address; ptr++) {
     const value = getValue(ptr, 'i8');
     string += String.fromCharCode(value);
   }
-  localStorage.setItem("ZELDA_SRAM", string);
+  localStorage.setItem(key, string);
 });
 #endif /* EMSCRIPTEN */
 
 ZeldaEnv g_zenv;
 uint8 g_ram[131072];
-uint8 hack[131072];
-
 uint32 g_wanted_zelda_features;
 
 static void Startup_InitializeMemory();
@@ -459,6 +466,9 @@ typedef struct StateRecorder {
   ByteArray base_snapshot;
 } StateRecorder;
 
+static void StateRecorder_GenerateBlob(StateRecorder *sr, ByteArray *ba);
+static void StateRecorder_LoadBlob(StateRecorder *sr, ByteArray *ba);
+
 static StateRecorder state_recorder;
 
 void StateRecorder_Init(StateRecorder *sr) {
@@ -503,11 +513,9 @@ void StateRecorder_RecordPatchByte(StateRecorder *sr, uint32 addr, const uint8 *
     ByteArray_AppendVl(&sr->log, num - 1 - 3);
   ByteArray_AppendByte(&sr->log, addr >> 8);
   ByteArray_AppendByte(&sr->log, addr);
-  for (int i = 0; i < num; i++)
+  for (int i = 0; i < num; i++) {
     ByteArray_AppendByte(&sr->log, value[i]);
-  //  while (lb < sr->log.size)
-  //    printf("%.2x ", sr->log.data[lb++]);
-  //  printf("\n");
+  }
 }
 
 void ReadFromFile(FILE *f, void *data, size_t n) {
@@ -515,60 +523,13 @@ void ReadFromFile(FILE *f, void *data, size_t n) {
     Die("fread failed\n");
 }
 
-void StateRecorder_Load(StateRecorder *sr, FILE *f, bool replay_mode) {
-  // todo: fix robustness on invalid data.
-  uint32 hdr[8] = { 0 };
-  ReadFromFile(f, hdr, sizeof(hdr));
-
-  assert(hdr[0] == 1);
-
-  sr->total_frames = hdr[1];
-  ByteArray_Resize(&sr->log, hdr[2]);
-  ReadFromFile(f, sr->log.data, sr->log.size);
-  sr->last_inputs = hdr[3];
-  sr->frames_since_last = hdr[4];
-
-  ByteArray_Resize(&sr->base_snapshot, (hdr[5] & 1) ? hdr[6] : 0);
-  ReadFromFile(f, sr->base_snapshot.data, sr->base_snapshot.size);
-
-  sr->replay_next_cmd_at = 0;
-
-  sr->replay_mode = replay_mode;
-  if (replay_mode) {
-    sr->frames_since_last = 0;
-    sr->last_inputs = 0;
-    sr->replay_pos = sr->replay_pos_last_complete = 0;
-    sr->replay_frame_counter = 0;
-    // Load snapshot from |base_snapshot_|, or reset if empty.
-
-    if (sr->base_snapshot.size) {
-      LoadFuncState state = { sr->base_snapshot.data, sr->base_snapshot.data + sr->base_snapshot.size };
-      LoadSnesState(&loadFunc, &state);
-      assert(state.p == state.pend);
-    } else {
-      ZeldaReset(false);
-    }
-  } else {
-    // Resume replay from the saved position?
-    sr->replay_pos = sr->replay_pos_last_complete = hdr[5] >> 1;
-    sr->replay_frame_counter = hdr[7];
-    sr->replay_mode = (sr->replay_frame_counter != 0);
-
-    ByteArray arr = { 0 };
-    ByteArray_Resize(&arr, hdr[6]);
-    ReadFromFile(f, arr.data, arr.size);
-    LoadFuncState state = { arr.data, arr.data + arr.size };
-    LoadSnesState(&loadFunc, &state);
-    ByteArray_Destroy(&arr);
-    assert(state.p == state.pend);
-  }
-}
-
-void StateRecorder_Save(StateRecorder *sr, FILE *f) {
-  uint32 hdr[8] = { 0 };
+/**
+ * @brief Added for WASM save state support.
+ */
+static void StateRecorder_GenerateBlob(StateRecorder *sr, ByteArray *ba) {
+  uint32 hdr[8] = { 0 }; /* 0x100 */
   ByteArray arr = { 0 };
   SaveSnesState(&saveFunc, &arr);
-  assert(sr->base_snapshot.size == 0 || sr->base_snapshot.size == arr.size);
 
   hdr[0] = 1;
   hdr[1] = sr->total_frames;
@@ -577,19 +538,53 @@ void StateRecorder_Save(StateRecorder *sr, FILE *f) {
   hdr[4] = sr->frames_since_last;
   hdr[5] = sr->base_snapshot.size ? 1 : 0;
   hdr[6] = (uint32)arr.size;
-  // If saving while in replay mode, also need to persist
-  // sr->replay_pos_last_complete and sr->replay_frame_counter
-  // so the replaying can be resumed.
+
   if (sr->replay_mode) {
     hdr[5] |= sr->replay_pos_last_complete << 1;
     hdr[7] = sr->replay_frame_counter;
   }
-  fwrite(hdr, 1, sizeof(hdr), f);
-  fwrite(sr->log.data, 1, hdr[2], f);
-  fwrite(sr->base_snapshot.data, 1, sr->base_snapshot.size, f);
-  fwrite(arr.data, 1, arr.size, f);
 
+  size_t size = sizeof(hdr) + hdr[2] + sr->base_snapshot.size + arr.size;
+
+  ByteArray_AppendData(ba, (const uint8 *)&hdr, sizeof(hdr));
+  ByteArray_AppendData(ba, sr->log.data, hdr[2]);
+  ByteArray_AppendData(ba, sr->base_snapshot.data, sr->base_snapshot.size);
+  ByteArray_AppendData(ba, arr.data, arr.size);
   ByteArray_Destroy(&arr);
+}
+
+/* TODO: Add logic for replay mode */
+static void StateRecorder_LoadBlob(StateRecorder *sr, ByteArray *ba) {
+  uint32 hdr[8] = { 0 };
+  ByteArray arr = { 0 };
+
+  uint8_t* data_ptr = ba->data;
+  memcpy(hdr, data_ptr, sizeof(hdr));
+  data_ptr += sizeof(hdr);
+  sr->total_frames = hdr[1];
+
+  ByteArray_Resize(&sr->log, hdr[2]);
+  ByteArray_Resize(&sr->base_snapshot, (hdr[5] & 1) ? hdr[6] : 0);
+  ByteArray_Resize(&arr, hdr[6]);
+
+  sr->replay_pos = sr->replay_pos_last_complete = hdr[5] >> 1;
+  sr->replay_frame_counter = hdr[7];
+  sr->replay_mode = (sr->replay_frame_counter != 0);
+  sr->replay_next_cmd_at = 0;
+
+  memcpy(sr->log.data, data_ptr, sr->log.size);
+  data_ptr += sr->log.size;
+  
+  memcpy(sr->base_snapshot.data, data_ptr, sr->base_snapshot.size);
+  data_ptr += sr->base_snapshot.size;
+  
+  memcpy(arr.data, data_ptr, arr.size);
+  data_ptr += arr.size;
+
+  LoadFuncState state = { arr.data, arr.data + arr.size };
+  LoadSnesState(&loadFunc, &state);
+  ByteArray_Destroy(&arr);
+  assert(state.p == state.pend);
 }
 
 void StateRecorder_ClearKeyLog(StateRecorder *sr) {
@@ -806,25 +801,41 @@ static const char *const kReferenceSaves[] = {
 
 void SaveLoadSlot(int cmd, int which) {
   char name[128];
+  ByteArray ba = { 0 };
+
   if (which & 256) {
     if (cmd == kSaveLoad_Save)
       return;
-    sprintf(name, "saves/ref/%s", kReferenceSaves[which - 256]);
+    sprintf(name, "ZELDA_saves/ref/%s", kReferenceSaves[which - 256]);
   } else {
-    sprintf(name, "saves/save%d.sav", which);
+    sprintf(name, "ZELDA_saves/save%d.sav", which);
   }
-  FILE *f = fopen(name, cmd != kSaveLoad_Save ? "rb" : "wb");
-  if (f) {
-    printf("*** %s slot %d\n",
+  printf("*** %s slot %d\n",
       cmd == kSaveLoad_Save ? "Saving" : cmd == kSaveLoad_Load ? "Loading" : "Replaying", which);
 
-    if (cmd != kSaveLoad_Save)
-      StateRecorder_Load(&state_recorder, f, cmd == kSaveLoad_Replay);
-    else
-      StateRecorder_Save(&state_recorder, f);
-
-    fclose(f);
+#ifndef EMSCRIPTEN
+  FILE *f = fopen(name, cmd != kSaveLoad_Save ? "rb" : "wb");
+#endif /* EMSCRIPTEN */
+  if (cmd == kSaveLoad_Save) {
+    StateRecorder_GenerateBlob(&state_recorder, &ba);
+#ifdef EMSCRIPTEN
+    js_write_data(name, ba.data, ba.size);
+#else
+    fwrite(ba.data, 1, ba.size, f);
+#endif /* EMSCRIPTEN */
+  } else {
+#ifdef EMSCRIPTEN
+    ByteArray_Resize(&ba, js_get_data_size(name));
+    js_read_data(name, ba.data, ba.size);
+#else
+    ReadFromFile(f, ba.data, ba.size);
+#endif /* EMSCRIPTEN */
+    StateRecorder_LoadBlob(&state_recorder, &ba);
   }
+#ifndef EMSCRIPTEN
+  fclose(f);
+#endif /* EMSCRIPTEN */  
+  ByteArray_Destroy(&ba);
 }
 
 typedef struct StateRecoderMultiPatch {
@@ -832,7 +843,6 @@ typedef struct StateRecoderMultiPatch {
   uint32 addr;
   uint8 vals[256];
 } StateRecoderMultiPatch;
-
 
 void StateRecoderMultiPatch_Init(StateRecoderMultiPatch *mp) {
   mp->count = mp->addr = 0;
@@ -882,7 +892,7 @@ void PatchCommand(char c) {
 
 void ZeldaReadSram() {
 #ifdef EMSCRIPTEN
-  js_read_sram(g_zenv.sram, 8192);
+  js_read_data("ZELDA_SRAM", g_zenv.sram, 8192);
 #else
   FILE *f = fopen("saves/sram.dat", "rb");
   if (f) {
@@ -896,7 +906,7 @@ void ZeldaReadSram() {
 
 void ZeldaWriteSram() {
 #ifdef EMSCRIPTEN
-  js_write_sram(g_zenv.sram, 8192);
+  js_write_data("ZELDA_SRAM", g_zenv.sram, 8192);
 #else
   rename("saves/sram.dat", "saves/sram.bak");
   FILE *f = fopen("saves/sram.dat", "wb");
