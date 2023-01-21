@@ -138,15 +138,24 @@ static void sdl_loop(void* arg) {
     g_gamepad_buttons = 0;
   inputs |= g_gamepad_buttons;
 
+  bool is_replay;
   SDL_LockMutex(g_audio_mutex);
-  bool is_replay = ZeldaRunFrame(inputs);
+#ifdef EMSCRIPTEN
+  int frame_skip = 4;
+  do {
+#endif /* EMSCRIPTEN */
+  is_replay = ZeldaRunFrame(inputs);
+  frameCtr++;
+#ifdef EMSCRIPTEN
+  } while(g_turbo && --frame_skip);
+#endif /* EMSCRIPTEN */
   SDL_UnlockMutex(g_audio_mutex);
 
-  frameCtr++;
-
+#ifndef EMSCRIPTEN
   if ((g_turbo ^ (is_replay & g_replay_turbo)) && (frameCtr & (g_turbo ? 0xf : 0x7f)) != 0) {
     return;
   }
+#endif /* EMSCRIPTEN */
 
   DrawPpuFrameWithPerf();
 
@@ -544,7 +553,7 @@ int main(int argc, char** argv) {
 
 
 #ifdef EMSCRIPTEN
-  emscripten_set_main_loop_arg(sdl_loop, NULL, 0, 1);
+  emscripten_set_main_loop_arg(sdl_loop, NULL, 60, 1);
 #else
   while (running) {
     sdl_loop(NULL);
