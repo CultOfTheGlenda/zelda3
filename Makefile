@@ -29,9 +29,9 @@ $(TARGET_EXEC): $(OBJS) $(RES)
 %.o : %.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
-web: web/zelda3.html tables/zelda3_assets.dat
-web/zelda3.html: $(OBJS) $(RES)
-	$(CC) $^ -o $@ $(LDFLAGS) $(SDLFLAGS) -sALLOW_MEMORY_GROWTH --shell-file shell.html --embed-file zelda3.ini --embed-file tables/zelda3_assets.dat@/
+web: ui/static/zelda3.js tables/zelda3_assets.dat
+ui/static/zelda3.js: $(OBJS) $(RES)
+	$(CC) $^ -o $@ $(LDFLAGS) $(SDLFLAGS) --embed-file zelda3.ini --embed-file tables/zelda3_assets.dat@/
 %.o : %.c
 	$(CC) -c $(CFLAGS) $< -o $@
 

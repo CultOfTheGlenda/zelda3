@@ -780,9 +780,6 @@ bool ZeldaRunFrame(int inputs) {
   return is_replay;
 }
 
-
-
-
 static const char *const kReferenceSaves[] = {
   "Chapter 1 - Zelda's Rescue.sav",
   "Chapter 2 - After Eastern Palace.sav",

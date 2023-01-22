@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-  <title>Emscripten-Generated Code</title>
+  <title>The Legend of Zelda: A Link to the Past</title>
   <style>
     :root {
       --screen-scale: 6;
@@ -44,46 +44,6 @@
 
       border-radius: 100%;
       background-color: rgb(189, 215, 46);
-    }
-
-    @-webkit-keyframes rotation {
-      from {
-        -webkit-transform: rotate(0deg);
-      }
-
-      to {
-        -webkit-transform: rotate(360deg);
-      }
-    }
-
-    @-moz-keyframes rotation {
-      from {
-        -moz-transform: rotate(0deg);
-      }
-
-      to {
-        -moz-transform: rotate(360deg);
-      }
-    }
-
-    @-o-keyframes rotation {
-      from {
-        -o-transform: rotate(0deg);
-      }
-
-      to {
-        -o-transform: rotate(360deg);
-      }
-    }
-
-    @keyframes rotation {
-      from {
-        transform: rotate(0deg);
-      }
-
-      to {
-        transform: rotate(360deg);
-      }
     }
 
     #status {
@@ -173,7 +133,7 @@
     <progress value="0" max="100" id="progress" hidden=1></progress>
   </div>
 
-  <div class="inventory-editor">
+  <!-- <div class="inventory-editor">
     <input class="inventory-editor-item" type="checkbox" data-value="0x1" data-address="0xF341" name="boomerang">boomerang</input>
     <input class="inventory-editor-item" type="checkbox" data-value="0x1" data-address="0xF342" name="hookshot">hookshot</input>
     <input class="inventory-editor-item" type="checkbox" data-value="0x1" data-address="0xF343" name="bombs">bombs</input>
@@ -193,20 +153,20 @@
     <input class="inventory-editor-item" type="checkbox" data-value="0x1" data-address="0xF356" name="flippers">flippers</input>
     <input class="inventory-editor-item" type="checkbox" data-value="0x1" data-address="0xF357" name="moon_pearl">moon_pearl</input>
     <input class="inventory-editor-item" type="checkbox" data-value="0x2" data-address="0xF353" name="mirror">mirror</input>
-  </div>
+  </div> -->
 
   <div class="theatre">
     <canvas
       width="398"
       height="224"
-      class="emscripten hidden"
+      class="emscripten"
       id="canvas"
       oncontextmenu="event.preventDefault()"
       tabindex=-1
     ></canvas>
-    <button class="start-button" onclick="start_zelda">
+    <!-- <button class="start-button" onclick="start_zelda">
       Start
-    </button>
+    </button> -->
   </div>
   <textarea id="output" rows="8" class="hidden"></textarea>
 
@@ -214,19 +174,24 @@
     var statusElement = document.getElementById('status');
     var progressElement = document.getElementById('progress');
     var spinnerElement = document.getElementById('spinner');
-    const startButton = document.querySelector('.start-button');
-    startButton.onclick = function (e) {
-      const canvas = document.querySelector('.theatre canvas');
-      canvas.classList.remove('hidden');
-      const scriptTag = document.createElement('script');
-      scriptTag.type = 'text/javascript';
-      scriptTag.setAttribute('async', 'true');
-      document.body.appendChild(scriptTag);
-      this.style.display = 'none';
-      
+    // const startButton = document.querySelector('.start-button');
+    // startButton.onclick = function (e) {
+    //   const canvas = document.querySelector('.theatre canvas');
+    //   canvas.classList.remove('hidden');
+    //   const scriptTag = document.createElement('script');
+    //   scriptTag.type = 'text/javascript';
+    //   scriptTag.setAttribute('async', 'true');
+    //   document.body.appendChild(scriptTag);
+    //   this.style.display = 'none';
 
-      setTimeout(() => scriptTag.src = 'zelda3.js', 0);
-    };
+    //   setTimeout(() => scriptTag.src = 'zelda3.js', 0);
+    // };
+
+    const scriptTag = document.createElement('script');
+    scriptTag.type = 'text/javascript';
+    scriptTag.setAttribute('async', 'true');
+    document.body.appendChild(scriptTag);
+    setTimeout(() => scriptTag.src = 'zelda3.js', 0);
 
     let lastMaxScalingSize = -Infinity;
     function setWindowScale() {
@@ -253,36 +218,39 @@
     };
 
     var Module = {
-      preRun: [],
+      preRun: [
+        () => window.uiPreRun(),
+      ],
       postRun: [
         () => {
           setWindowScale();
           window.onresize = setWindowScale;
-          const inventoryEditor = document.querySelector('.inventory-editor');
-          const itemElements = inventoryEditor.querySelectorAll('.inventory-editor-item');
-          setInterval(() => {
-            itemElements.forEach((item) => {
-              const gramAddress = Module._js_get_g_ram();
-              const address = +item.dataset.address;
-              const gameValue = getValue(gramAddress + address, 'i8');
-              if (gameValue) item.checked = true;
-              else item.checked = false;
-            });
-          }, 250);
+          // const inventoryEditor = document.querySelector('.inventory-editor');
+          // const itemElements = inventoryEditor.querySelectorAll('.inventory-editor-item');
+          // setInterval(() => {
+          //   itemElements.forEach((item) => {
+          //     const gramAddress = Module._js_get_g_ram();
+          //     const address = +item.dataset.address;
+          //     const gameValue = getValue(gramAddress + address, 'i8');
+          //     if (gameValue) item.checked = true;
+          //     else item.checked = false;
+          //   });
+          // }, 250);
 
-          inventoryEditor.addEventListener('click', (e) => {
-            if (!e.target?.classList?.contains('inventory-editor-item')) {
-              return;
-            }
+          // inventoryEditor.addEventListener('click', (e) => {
+          //   if (!e.target?.classList?.contains('inventory-editor-item')) {
+          //     return;
+          //   }
 
-            const isSet = e.target.checked;
-            const address = +e.target.dataset.address;
-            const value = isSet ? +e.target.dataset.value : 0x0;
+          //   const isSet = e.target.checked;
+          //   const address = +e.target.dataset.address;
+          //   const value = isSet ? +e.target.dataset.value : 0x0;
 
-            const gramAddress = Module._js_get_g_ram();
-            setValue(gramAddress + address, value, 'i8');
-          });
+          //   const gramAddress = Module._js_get_g_ram();
+          //   setValue(gramAddress + address, value, 'i8');
+          // });
         },
+        () => window.uiPostRun(),
       ],
       print: (function () {
         var element = document.getElementById('output');
@@ -345,9 +313,6 @@
       };
     };
   </script>
-  <!--
-    {{{ SCRIPT }}}
-  -->
+  <script type="module" src="index.js"> </script> 
 </body>
-
 </html>

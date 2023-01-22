@@ -548,12 +548,11 @@ int main(int argc, char** argv) {
     g_config.enhanced_mode7 ? "true" : "false",
     g_config.autosave ? "true" : "false",
     g_config.new_renderer ? "true" : "false"
-
   );
 
 
 #ifdef EMSCRIPTEN
-  emscripten_set_main_loop_arg(sdl_loop, NULL, 60, 1);
+  emscripten_set_main_loop_arg(sdl_loop, NULL, 0, 1);
 #else
   while (running) {
     sdl_loop(NULL);

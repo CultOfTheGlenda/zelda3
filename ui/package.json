@@ -1,0 +1,21 @@
+{
+  "name": "zelda3-ui",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "parcel index.html --port 8080 --hmr-port 8181",
+    "build": "parcel build index.html"
+  },
+  "dependencies": {
+    "lodash": "^4.17.21"
+  },
+  "devDependencies": {
+    "parcel": "^2",
+    "parcel-reporter-static-files-copy": "^1.5.0"
+  },
+  "keywords": [],
+  "staticFiles": {
+    "staticPath": "static"
+  }
+}
