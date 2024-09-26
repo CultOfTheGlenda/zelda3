@@ -1,0 +1,19 @@
+version: "2"
+services:
+  ui-dev:
+    ports:
+      - 8080:8080
+      - 8181:8181
+    volumes:
+      - ./ui:/app
+    working_dir: /app
+    # entrypoint: /bin/sh
+    command: start
+    entrypoint: /usr/local/bin/npm
+    image: node
+  zelda-build:
+    command: nodemon -e c,h -L --signal SIGKILL --watch "./**" --exec "bash -c 'emmake make web && touch /app/ui/index.html' || true"
+    working_dir: /app
+    build: .
+    volumes:
+      - .:/app
